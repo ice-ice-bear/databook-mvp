@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+dumps
+*.sql.gz
+*.dump
+.venv
+__pycache__
+reports
+logs
+work

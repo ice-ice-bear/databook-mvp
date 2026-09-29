@@ -1,0 +1,17 @@
+name: databook-mvp
+services:
+  worker:
+    build: .
+    environment:
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${DB_NAME:-databook_mvp_test}
+      DB_USER: ${DB_USER:-databook_mvp}
+      DB_PASSWORD: ${DB_PASSWORD:-local-demo-only}
+      REPORT_DIR: /app/reports
+      LOG_DIR: /app/logs
+    volumes:
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    extra_hosts:
+      - host.docker.internal:host-gateway

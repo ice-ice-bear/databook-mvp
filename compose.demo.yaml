@@ -1,0 +1,27 @@
+services:
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: databook_mvp_demo
+      MARIADB_USER: databook_mvp
+      MARIADB_PASSWORD: local-demo-only
+      MARIADB_ROOT_PASSWORD: local-demo-root-only
+    volumes:
+      - demo-db:/var/lib/mysql
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  worker:
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: databook_mvp_demo
+      DB_USER: databook_mvp
+      DB_PASSWORD: local-demo-only
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  demo-db:

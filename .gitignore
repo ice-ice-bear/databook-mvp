@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+dumps/
+*.sql.gz
+*.dump
+.venv/
+__pycache__/
+*.pyc
+reports/
+logs/
+work/
+.DS_Store
