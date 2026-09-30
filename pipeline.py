@@ -93,8 +93,11 @@ def extract(days, csv_path=None):
         rows = providers.example_rows(days)
     elif os.environ.get('DATA_PROVIDER', 'mock') == 'mock':
         rows = mock_rows(days)
+    elif os.environ.get('DATA_PROVIDER') == 'adobe':
+        import adobe
+        rows = adobe.daily_rows(days)
     else:
-        raise ValueError('DATA_PROVIDER must be mock or example_api; use --csv for CSV')
+        raise ValueError('DATA_PROVIDER must be mock, example_api or adobe; use --csv for CSV')
     return validate(rows, days)
 
 
@@ -269,7 +272,8 @@ def export_excel(path, rows, history, totals, day, source, run_id, analysis=None
             cell.number_format = '#,##0;[Red](#,##0);0'
     sheet.append([])
     sheet.append(['계산 기준', '주문/방문 = 총 주문 ÷ 총 방문. 비율 차이는 pp. 0분모는 n.a.'])
-    sheet.append(['데이터 범위', '테스트 데이터의 방문은 상호 배타적. 실제 Adobe 총계와는 별도 대조 필요.'])
+    sheet.append(['데이터 범위', 'Adobe 분해 행 합산. API 총계와 대조한 입력이며 기간 순방문자가 아닙니다.'
+                 if source.startswith('Adobe Analytics') else '테스트 데이터의 방문은 상호 배타적. 실제 Adobe 총계와는 별도 대조 필요.'])
     sheet.append(['분석 방식', 'SQL·코드 계산. LLM 상태: ' + (analysis or {}).get('status', 'disabled')])
     sheet.append(['실행 ID', run_id])
     sheet['B3'].number_format = sheet['D3'].number_format = 'yyyy-mm-dd'
@@ -367,7 +371,10 @@ def run(conn, day, csv_path=None, regenerate=False, report_dir=None, log_dir=Non
         rows = extract(days, csv_path)
         fingerprint = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
         source = f'CSV 테스트 데이터: {Path(csv_path).name}' if csv_path else (
-            '가상 쇼핑몰 HTTP API (example_api)' if os.environ.get('DATA_PROVIDER') == 'example_api' else '가상 데이터 (mock)')
+            {'example_api':'가상 쇼핑몰 HTTP API (example_api)', 'adobe':'Adobe Analytics (채널·디바이스 분해)'}
+            .get(os.environ.get('DATA_PROVIDER'), '가상 데이터 (mock)'))
+        if not csv_path and os.environ.get('DATA_PROVIDER') == 'adobe':
+            source += ' · Report Suite: ' + os.environ.get('ADOBE_REPORT_SUITE_ID', '')
         llm = providers.llm_config()
         import query_workspace as w
         contents=w.pipeline_contents()
@@ -513,6 +520,9 @@ def ask(conn, day, question):
 def main():
     parser = argparse.ArgumentParser(description='MariaDB → SQL → daily Excel local MVP (mock/CSV/example API + optional LLM)')
     commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('adobe-check', help='Check Adobe authentication and available metadata; no DB/LLM calls')
+    adobe_preview = commands.add_parser('adobe-preview', help='Fetch unmodified Adobe daily breakdowns; no DB/LLM calls')
+    adobe_preview.add_argument('--date', type=date.fromisoformat, required=True)
     commands.add_parser('init-db', help='Create two MVP tables in a designated TEST database only')
     report = commands.add_parser('run', help='Generate a new dated Excel report')
     report.add_argument('--date', type=date.fromisoformat,
@@ -547,6 +557,12 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     try:
+        if args.command in ('adobe-check','adobe-preview'):
+            import adobe
+            client = adobe.Client()
+            result = client.check() if args.command == 'adobe-check' else client.collect((args.date-timedelta(days=7),args.date))
+            print(json.dumps(result,ensure_ascii=False,indent=2))
+            return 0
         with connect() as conn:
             if args.command in ('tables','table-preview','query','query-answer','query-report','aggregation-preview','pipeline-preview'):
                 import query_workspace as w

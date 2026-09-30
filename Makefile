@@ -10,6 +10,7 @@ demo:
 	uv run --locked sync_onedrive.py --date $(DATE)
 
 test:
+	uv run --locked test_adobe.py
 	uv run --locked test_web.py
 	uv run --locked test_schedule.py
 	uv run --locked test_sync_onedrive.py

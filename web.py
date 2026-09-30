@@ -59,6 +59,8 @@ def worker(*args):
                              'run', '--rm', 'worker', *args], cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=150)
     if result.returncode:
         error = result.stderr
+        if ' ERROR Adobe ' in error:
+            raise ValueError(next(line.split(' ERROR ',1)[1] for line in error.splitlines() if ' ERROR Adobe ' in line))
         if 'Incomplete source' in error:
             raise ValueError(error.split('Incomplete source:', 1)[1].splitlines()[0].strip())
         if 'configuration changed' in error:

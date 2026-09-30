@@ -169,6 +169,24 @@ def check():
                 expect_failure(lambda: p.providers.plan_query('질문',day),ValueError)
             with patch.object(p.providers, 'summarize', return_value={'status':'succeeded','text':json.dumps(plan)}):
                 assert p.providers.plan_query('질문',day)==plan
+        # Adobe mapping -> real MariaDB transaction -> dated Excel, with offline source only.
+        import adobe
+        fixture={'suite':{'currency':'KRW','timezoneZoneinfo':'Asia/Seoul'}, 'rows':rows,
+                 'totals':{str(d):{m:sum(r[m] for r in rows if r['date']==str(d)) for m in p.METRICS} for d in days}}
+        with patch.dict(os.environ, {'DATA_PROVIDER':'adobe','LLM_PROVIDER':'none','ADOBE_MAPPING_CONFIRMED':'true',
+                'ADOBE_REPORT_SUITE_ID':'test-rsid','ADOBE_REPORT_SUITE_TIMEZONE':'Asia/Seoul',
+                'ADOBE_CHANNEL_MAP':json.dumps(dict(zip(p.CHANNELS,p.CHANNELS))),
+                'ADOBE_DEVICE_MAP':json.dumps(dict(zip(p.DEVICES,p.DEVICES)))}), patch.object(adobe,'Client') as client:
+            client.return_value.collect.return_value=fixture
+            output=p.run(conn,day,report_dir=root/'adobe-reports',log_dir=root/'adobe-logs')
+            client.return_value.collect.assert_called_once_with(days)
+            wb=load_workbook(output,data_only=True)
+            assert wb['일일 보고서']['C9'].value==22273572
+            assert wb['일일 보고서']['B2'].value.startswith('Adobe Analytics')
+            assert wb['조회 데이터'].max_row==31
+            wb.close()
+            manifest=json.loads((root/'adobe-reports'/f'daily_report_{day}.json').read_text())
+            assert manifest['analysis']['status']=='disabled' and '가상' not in manifest['identity']['llm']['prompt']
     print('PASS: HTTP provider, OpenAI/Gemini contracts, LLM fallback, formula safety; ')
     print('PASS: MariaDB load/SQL/export; known totals; duplicate/missing/invalid input; '
           'idempotency; versions; concurrent lock; changed input; rollback; zero denominator.')

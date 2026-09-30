@@ -2,7 +2,7 @@
 
 가상 데이터 추출 → **MariaDB 적재 → SQL 가공·이력 누적 → 날짜별 신규 Excel 생성**을 한 명령으로 실행합니다. 기존 운영 DB를 교체하거나 변경하지 않습니다.
 
-현재 구현은 가상 데이터를 사용하는 로컬 검증 범위입니다. 보고서·데이터 질문·관리자 화면, 테이블 ER 탐색, 실행 검증 후 SQL 등록·수정, KST 요일별 예약, OneDrive 폴더 설정을 지원합니다. 데이터 수집은 가상 쇼핑몰 HTTP API이며 LLM은 OpenAI/Gemini를 선택할 수 있습니다. 실제 Adobe API, 기존 DB 스키마, 외부 대시보드와 Word는 후속 연동 범위입니다.
+현재 구현은 로컬 검증 범위입니다. 보고서·데이터 질문·관리자 화면, 테이블 ER 탐색, 실행 검증 후 SQL 등록·수정, KST 요일별 예약, OneDrive 폴더 설정을 지원합니다. 데이터 수집은 가상 쇼핑몰 HTTP API 또는 Adobe Analytics 2.0이며 LLM은 OpenAI/Gemini를 선택할 수 있습니다. Adobe 인증·메타데이터 확인·일별 수집 어댑터는 구현되어 있지만 실제 계정 연결은 아직 검증하지 않았습니다. 기존 DB 스키마 매핑, 외부 대시보드와 Word는 후속 연동 범위입니다.
 
 ## 빠른 시작
 
@@ -68,7 +68,7 @@ make web
 ## 관리자 SQL 조회 · 저장 쿼리
 
 설정 화면에서 연결된 MariaDB의 테이블·컬럼을 확인하고 SELECT를 실행할 수 있습니다.
-현재 연결 대상은 데모 DB이며, 기존 DB와 Adobe 실제 연결은 아래 준비 가이드를 따르는 후속 작업입니다.
+현재 연결 대상은 데모 DB입니다. Adobe는 아래 사전 설정으로 읽기 확인부터 시작하며, 기존 MariaDB 연결은 별도 매핑 작업입니다.
 
 1. **테이블 탐색**의 ER 카드에서 컬럼·타입·PK/FK를 확인합니다. 테이블 또는 컬럼 이름으로 검색할 수 있으며 뷰도 표시합니다.
 2. 테이블 이름을 클릭하면 실제 DB의 예시 최대 20행을 조회합니다. **SQL로 조회**는 편집기에 SELECT를 넣고, **이 테이블로 질문**은 질문 화면에 해당 테이블을 선택합니다.
@@ -177,7 +177,7 @@ LLM에는 조회 결과를 전달합니다. 기본 질문은 검증된 조건으
 - LLM 설정·프롬프트 변경은 보고서 식별에 반영합니다. 키 값은 식별자나 보고서에 저장하지 않습니다.
 - 한 번 호출하며 자동 재시도는 없습니다. HTTP 읽기 제한 1MB, 소켓 타임아웃 45초입니다.
 
-`DATA_PROVIDER=mock|example_api`와 `LLM_PROVIDER=none|openai|gemini`는 독립적입니다.
+`DATA_PROVIDER=mock|example_api|adobe`와 `LLM_PROVIDER=none|openai|gemini`는 독립적입니다.
 `--csv`는 DATA_PROVIDER보다 우선합니다. 다른 실제 데이터 공급자를 추가할 때는
 `providers.py`의 변환 함수에서 공통 필드로 맞추고 `pipeline.extract`에 분기를 추가하면 됩니다.
 공통 필드: `date, channel, device, visits, page_views, orders, revenue_krw`.
@@ -279,7 +279,7 @@ make regenerate DATE=2026-09-27
 - `regenerate`는 `_v2.xlsx`, `_v3.xlsx`처럼 새 파일을 만들고 이전 파일을 보존합니다.
 - 입력 CSV·SQL·접속 DB가 변경됐는데 재생성 옵션이 없으면 명시적으로 실패합니다.
 - `data/adobe_mock_daily.csv` 범위는 2026-06-30~2026-09-27입니다. 전주 동일 요일도 필요하므로 해당 CSV로 생성할 수 있는 보고일은 2026-07-07~2026-09-27입니다.
-- CSV는 정확한 날짜 × 5채널 × 3디바이스 조합을 요구합니다. 누락 행을 0으로 채우지 않습니다. 실제 Adobe 연결 때는 실제 차원·누락 의미에 맞춰 이 계약을 수정해야 합니다.
+- CSV는 정확한 날짜 × 5채널 × 3디바이스 조합을 요구합니다. 누락 행을 0으로 채우지 않습니다. Adobe 어댑터도 누락 조합을 임의로 채우지 않습니다. 다른 차원·누락 의미·소수 금액을 쓰려면 DB·SQL·출력 계약을 함께 변경해야 합니다.
 
 매일 바뀌는 날짜로 로컬 테스트하려면 CSV 대신 결정적인 가상 데이터 생성기를 사용합니다. `--date` 생략 시 한국 시간 기준 어제이며 API 키는 필요 없습니다.
 
@@ -296,6 +296,8 @@ make test
 ```
 
 실제 데모 MariaDB를 사용해 적재·SQL 집계·Excel 수치, 입력 누락·중복·음수 거부, 0분모, 동일 요청 재사용, 새 버전 생성, 동시 실행 잠금, 파일 생성 실패 시 DB 롤백과 이전 파일 보존을 확인합니다.
+
+Adobe는 가짜 HTTP 응답으로 인증·페이지·breakdown·토큰 갱신·오류 처리를 검증하고, 정규화한 가짜 Adobe 데이터를 실제 데모 MariaDB에 적재해 Excel까지 확인합니다. 실제 Adobe 계정/API는 테스트에서 사용하지 않습니다.
 
 웹·예약·OneDrive 설정, 기본 분석 SQL의 직접 수정, 등록·수정 시 1회 실행 후 저장, 검증 실패 시 기존 파일 보존도 확인합니다. 다섯 파이프라인 파일을 각각 실행·롤백하고 대상 날짜 밖의 DELETE와 잘못된 보고서 결과를 거부하는지 검증합니다. ER의 실제 FK·뷰는 임시 테스트 객체로 확인 후 제거합니다. 테스트는 지정된 데모 DB와 가상 날짜 데이터에 쓰므로 운영 DB에서 실행하지 않습니다. LLM 호출과 OneDrive 복사는 테스트에서 실행하지 않습니다.
 
@@ -358,33 +360,73 @@ docker compose run --rm worker run --date 2026-09-27 --csv data/adobe_mock_daily
 Docker Desktop의 호스트 DB 주소 예시는 `host.docker.internal`입니다. Linux 호스트에서도 Compose의
 `extra_hosts` 설정을 사용합니다. 실제 계정의 허용 호스트·포트 접근은 서버 설정과 함께 확인하세요.
 
-## Adobe Analytics 연결 준비 가이드 (마지막 단계)
+## Adobe Analytics 사전 설정과 실제 수집
 
-**현재 Adobe provider는 미구현입니다. 아래 준비값을 입력하는 것만으로 실제 API가 연결되지는 않습니다.**
+`adobe.py`는 OAuth Server-to-Server 인증, Discovery/차원/지표 조회, 채널 → 디바이스 일별 breakdown, 페이지 처리, 401 토큰 갱신, 429·일시 오류의 제한된 재시도를 구현합니다. 토큰·비밀키·응답 오류 본문은 로그나 파일에 저장하지 않습니다. 실제 Adobe 계정으로는 아직 검증하지 않았습니다.
 
-1. Adobe Admin Console에서 올바른 조직과 Analytics product profile을 선택하고 개발자 권한, 대상 report suite·지표·차원 접근권한을 부여합니다.
-2. Adobe Developer Console 프로젝트에서 Adobe Analytics API와 **OAuth Server-to-Server** 자격 증명을 준비합니다. Client ID, Client Secret, 해당 프로젝트의 Scopes를 확인합니다.
-3. `discovery/me`로 Global Company ID를 확인하고 대상 Report Suite ID와 시간대·통화를 기록합니다. 매일 실행은 KST이지만 데이터 날짜는 report suite 시간대와 맞춰 별도로 정의해야 합니다.
-4. 사용할 날짜·채널·디바이스 차원과 visits/pageviews/orders/revenue 지표의 실제 ID를 정합니다. 회사별 eVar·event·계산 지표 사용 여부를 확인합니다.
-5. OAuth 토큰을 받아 Reports API로 테스트 하루를 추출합니다. 페이지 끝까지 수집하고 429/일시 오류 처리와 요청 제한을 구현합니다. 날짜·차원별 breakdown 결과가 누락되지 않았는지 확인합니다.
-6. `providers.py`에서 Adobe 응답을 공통 필드로 정규화하고 `pipeline.extract`에 provider 선택을 추가합니다. 환경변수는 Compose worker에도 전달해야 합니다. 우선 동일 테스트 DB와 Excel 출력으로 검증합니다.
-7. 실제 AA의 Visits·Unique Visitors·세그먼트·차원 집계는 서로 합산 가능하다고 가정하지 않습니다. Workspace의 동일 조건 총계와 대조하고, 현재 정수 KRW·고정 차원 검증을 실제 통화·금액 정밀도에 맞춥니다.
-8. 수동 실행과 일일 재실행의 일치·중복 방지·토큰 만료·누락 데이터·날짜 경계 검증 후 관리자에서 예약을 활성화합니다.
+### 1. 개인 환경변수 입력
 
-향후 `.env` 설정 항목 예시입니다. 지금은 코드가 읽지 않습니다. 실제 값이나 토큰을 README·Git·로그에 남기지 마세요.
+Adobe Admin Console에서 Analytics product profile과 대상 Report Suite 접근 권한을 부여하고, [Adobe Developer Console](https://developer.adobe.com/console/) 프로젝트에 Adobe Analytics API와 **OAuth Server-to-Server** 자격 증명을 추가합니다.
 
-```dotenv
-ADOBE_CLIENT_ID=YOUR_CLIENT_ID
-ADOBE_CLIENT_SECRET=YOUR_CLIENT_SECRET
-ADOBE_SCOPES=YOUR_PROJECT_SCOPES
-ADOBE_GLOBAL_COMPANY_ID=YOUR_GLOBAL_COMPANY_ID
-ADOBE_REPORT_SUITE_ID=YOUR_RSID
+`.env.example`의 `ADOBE_*` 항목을 개인 `.env`에 입력하세요. 기존 파일은 덮어쓰지 않습니다.
+
+| 항목 | 입력할 값 |
+| --- | --- |
+| `ADOBE_CLIENT_ID`, `ADOBE_CLIENT_SECRET`, `ADOBE_SCOPES` | Developer Console의 해당 OAuth 자격 증명 값. Scopes는 프로젝트 값을 그대로 사용 |
+| `ADOBE_GLOBAL_COMPANY_ID` | 아래 `adobe-check`의 companies에 표시되는 Global Company ID |
+| `ADOBE_REPORT_SUITE_ID` | 분석할 Report Suite ID (RSID) |
+| `ADOBE_REPORT_SUITE_TIMEZONE` | `adobe-check`의 suite.timezoneZoneinfo와 동일한 값 |
+| `ADOBE_CHANNEL_DIMENSION`, `ADOBE_DEVICE_DIMENSION` | 조회된 실제 차원 ID. 기본값은 marketingchannel/mobiledevicetype |
+| `ADOBE_METRIC_VISITS`, `ADOBE_METRIC_PAGE_VIEWS`, `ADOBE_METRIC_ORDERS`, `ADOBE_METRIC_REVENUE_KRW` | 조회된 실제 지표 ID. 회사별 event/계산 지표라면 변경 |
+| `ADOBE_SEGMENT_ID` | 선택 사항. Workspace와 동일한 세그먼트를 적용할 때 입력 |
+| `ADOBE_CHANNEL_MAP`, `ADOBE_DEVICE_MAP` | 실제 Adobe 표시값을 MVP 값으로 변환하는 JSON. 예시의 키를 실제 값으로 교체 |
+| `ADOBE_MAPPING_CONFIRMED` | 초기값 `false`. 미리보기·매핑·집계 대조 후에만 `true` |
+
+`.env`의 기존 `DATA_PROVIDER`는 이 단계에서 유지합니다. 키·토큰·실제 응답은 Git에 넣지 않습니다. OneDrive/LLM 설정은 별개이며 변경할 필요가 없습니다.
+
+### 2. DB 쓰기 없이 인증·메타데이터 확인
+
+```sh
+docker compose -f compose.yaml build worker
+docker compose -f compose.yaml run --rm --no-deps worker adobe-check
 ```
 
-공식 참고: [시작·권한 설정](https://developer.adobe.com/analytics-apis/docs/2.0/guides/),
-[OAuth Server-to-Server](https://developer.adobe.com/developer-console/docs/guides/authentication/ServerToServerAuthentication/),
-[예약 보고서와 인증](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/reports/recurring),
-[Reporting API](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/reports/).
+첫 실행에는 OAuth 3개 값만 있어도 됩니다. 회사 목록을 확인해 Company ID와 RSID를 넣고 다시 실행하면 Report Suite의 통화·시간대와 접근 가능한 차원·지표 ID가 표시됩니다. 여러 회사 중 하나를 자동으로 선택하지 않습니다. 이 명령은 DB 연결, LLM 호출, Excel 생성, OneDrive 복사를 하지 않습니다.
+
+### 3. 일별 원천 미리보기
+
+```sh
+docker compose -f compose.yaml run --rm --no-deps worker adobe-preview --date 2026-09-29
+```
+
+보고일과 7일 전의 **실제 Adobe 채널·디바이스 표시값, 지표, API 총계**를 조회합니다. 금액 소수와 누락 조합도 그대로 확인하며 DB에는 쓰지 않습니다. 날짜는 Report Suite의 하루 `[00:00, 다음 날 00:00)`이며 KST 예약 시각과는 별개입니다. 원천 시간대에 맞는 완료된 날짜를 선택하세요. 이 출력은 실제 업무 데이터이므로 공개 저장소에 저장하지 마세요.
+
+### 4. 현재 MVP에 적재 가능한지 확인 후 활성화
+
+현재 일일 파이프라인은 다음 계약을 유지합니다. 더 넓은 스키마로 자동 변경하지 않습니다.
+
+- 5개 채널 `paid_search, organic_search, direct, email, social` × 3개 디바이스 `mobile, desktop, tablet`의 일대일 매핑과 두 날짜의 모든 조합이 필요합니다.
+- 예시의 `Other → desktop` 등은 계정마다 의미가 다르므로 확인 없이 사용하지 마세요. 미매핑 값·누락·중복은 적재 전에 실패합니다. 누락 행을 0으로 만들지 않습니다.
+- Report Suite 통화가 **KRW**, 금액·나머지 지표가 음수 없는 정수여야 합니다. 소수 금액을 반올림하거나 외화를 KRW로 이름만 바꾸지 않습니다.
+- 시간대 설정이 API 메타데이터와 같아야 합니다. 각 날짜의 분해 행 합계와 API 총계를 지표별로 대조합니다. Visits의 중복 등으로 총계가 다르면 적재를 거부합니다. 미리보기 총계도 동일 조건의 Workspace와 대조하세요.
+
+계약과 업무 기준이 맞는 경우에만 `.env`에서 `ADOBE_MAPPING_CONFIRMED=true`, `DATA_PROVIDER=adobe`로 변경합니다. 기존 웹·예약·저장 SQL의 수집 경로도 같은 어댑터를 사용합니다. `.env` 변경은 매번 새 Compose worker에 반영됩니다.
+
+```sh
+# 실제 Adobe 데이터 → 격리된 데모 MariaDB → 신규 Excel. 기존 파일은 보존합니다.
+docker compose -f compose.yaml -f compose.demo.yaml run --rm worker run --date 2026-09-29 --regenerate
+```
+
+이 명령은 데모 DB가 이미 초기화된 상태를 전제로 하며 실제 Adobe 날짜 데이터로 해당 날짜의 테스트 테이블을 갱신합니다. 처음에는 수동 결과를 확인하고 예약을 활성화하세요. 기존 운영 MariaDB로 전환하는 작업은 위 별도 가이드를 따라야 합니다. Adobe 키만 넣어도 DB 연결이 자동 전환되지는 않습니다.
+
+현재 계약과 맞지 않는 실제 차원·통화·지표는 **미리보기까지 사용**하고 스키마·SQL·Excel 매핑을 조정한 후 적재합니다. 대규모·hit 단위 수집은 이 Reports API 어댑터 범위 밖입니다. 한 breakdown은 최대 10페이지/10,000항목, 날짜당 최대 50개 채널로 제한합니다.
+
+오프라인 계약 검증은 `uv run --locked test_adobe.py`로 실행합니다. 실제 자격 증명이나 API를 사용하지 않고 인증 payload, 페이지/breakdown, 토큰 갱신, 재시도, 정수 금액, 누락·총계 불일치 차단을 확인합니다.
+
+공식 참고: [OAuth와 예약 보고서](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/reports/recurring),
+[Discovery](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/discovery),
+[차원 breakdown](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/reports/breakdowns),
+[Report Suite 메타데이터](https://developer.adobe.com/analytics-apis/docs/2.0/guides/endpoints/report-suites).
 
 
 ## 최소 운영 규칙
@@ -402,6 +444,7 @@ ADOBE_REPORT_SUITE_ID=YOUR_RSID
 pyproject.toml / uv.lock  호스트·Docker 의존성 정의와 잠금
 query_workspace.py    테이블 탐색·저장 SELECT·SQL 분석/보고서
 providers.py          예시 API 정규화 및 OpenAI/Gemini HTTP 호출
+adobe.py              Adobe 인증·메타데이터·일별 수집·매핑 검증
 example_api.py        로컬 가상 쇼핑몰 API 서버
 web.py                로컬 HTTP 화면·Compose 실행·다운로드
 web/index.html        질문·보고서 화면
@@ -413,6 +456,7 @@ data/                 기존 90일 가상 CSV
 compose.yaml          호스트 MariaDB에 연결하는 worker
 compose.demo.yaml     독립 MariaDB 테스트 환경
 test_pipeline.py      실제 MariaDB를 사용하는 통합 확인
+test_adobe.py         실제 키·API 없이 Adobe 계약과 오류 처리 확인
 schedule.py           KST 요일별 예약 실행·관리자 설정
 sync_onedrive.py       호스트에서 완성된 Excel을 OneDrive 폴더로 복사
 ```
