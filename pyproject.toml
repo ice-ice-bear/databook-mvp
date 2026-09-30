@@ -1,0 +1,12 @@
+[project]
+name = "databook-mvp"
+version = "0.1.0"
+description = "Local MariaDB reporting and data Q&A MVP"
+requires-python = ">=3.10"
+dependencies = [
+    "PyMySQL==1.1.2",
+    "openpyxl==3.1.5",
+]
+
+[tool.uv]
+package = false

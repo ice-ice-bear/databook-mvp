@@ -8,10 +8,17 @@ services:
       DB_NAME: ${DB_NAME:-databook_mvp_test}
       DB_USER: ${DB_USER:-databook_mvp}
       DB_PASSWORD: ${DB_PASSWORD:-local-demo-only}
+      DATA_PROVIDER: ${DATA_PROVIDER:-mock}
+      DATA_API_URL: ${DATA_API_URL:-http://example-api:8000/daily}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      LLM_MODEL: ${LLM_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       REPORT_DIR: /app/reports
       LOG_DIR: /app/logs
     volumes:
       - ./reports:/app/reports
       - ./logs:/app/logs
+      - ./work:/app/work:ro
     extra_hosts:
       - host.docker.internal:host-gateway

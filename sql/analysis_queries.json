@@ -1,0 +1,12 @@
+[
+  {
+    "id": "builtin:history-channel",
+    "title": "채널별 성과 · 집계 테이블",
+    "sql": "SELECT report_date, channel, visits, page_views, orders, revenue_krw\nFROM mvp_history_daily\nWHERE report_date BETWEEN %(start_date)s AND %(end_date)s\nORDER BY report_date, channel"
+  },
+  {
+    "id": "builtin:device",
+    "title": "디바이스별 성과 · 원본 테이블",
+    "sql": "SELECT report_date, device, SUM(visits) AS visits, SUM(orders) AS orders, SUM(revenue_krw) AS revenue_krw\nFROM mvp_raw_daily\nWHERE report_date BETWEEN %(start_date)s AND %(end_date)s\nGROUP BY report_date, device\nORDER BY report_date, device"
+  }
+]

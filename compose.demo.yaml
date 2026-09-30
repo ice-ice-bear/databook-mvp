@@ -13,6 +13,14 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+  example-api:
+    build: .
+    entrypoint: [python, example_api.py]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/daily?dates=2026-09-20,2026-09-27')"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
   worker:
     environment:
       DB_HOST: db
@@ -21,6 +29,8 @@ services:
       DB_USER: databook_mvp
       DB_PASSWORD: local-demo-only
     depends_on:
+      example-api:
+        condition: service_healthy
       db:
         condition: service_healthy
 volumes:
